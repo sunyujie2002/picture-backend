@@ -1,0 +1,29 @@
+{
+  "properties": [
+    {
+      "name": "cos.client.host",
+      "type": "java.lang.String",
+      "description": "COS 访问域名."
+    },
+    {
+      "name": "cos.client.secretId",
+      "type": "java.lang.String",
+      "description": "腾讯云 API 密钥 SecretId."
+    },
+    {
+      "name": "cos.client.secretKey",
+      "type": "java.lang.String",
+      "description": "腾讯云 API 密钥 SecretKey."
+    },
+    {
+      "name": "cos.client.region",
+      "type": "java.lang.String",
+      "description": "存储桶所在地域."
+    },
+    {
+      "name": "cos.client.bucket",
+      "type": "java.lang.String",
+      "description": "存储桶名称."
+    }
+  ]
+}

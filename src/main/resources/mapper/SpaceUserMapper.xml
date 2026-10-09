@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sunyujie.picture_backend.mapper.SpaceUserMapper">
+
+    <resultMap id="BaseResultMap" type="SpaceUser">
+        <id column="id" property="id" />
+        <result column="space_id" property="spaceId" />
+        <result column="user_id" property="userId" />
+        <result column="space_role" property="spaceRole" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="delete_time" property="deleteTime" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,
+        space_id,
+        user_id,
+        space_role,
+        create_time,
+        update_time,
+        delete_time
+    </sql>
+
+    <!-- 自定义 SQL 可在此添加，CRUD 由 BaseMapper 提供 -->
+</mapper>

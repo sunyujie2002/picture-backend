@@ -1,0 +1,80 @@
+server:
+  port: 8123
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: picture-backend
+  datasource:
+    # MySQL 连接信息：请改成本机实际值
+    url: jdbc:mysql://localhost:3306/picture_db?useSSL=false&serverTimezone=UTC&rewriteBatchedStatements=true
+    username: root
+    password: 请填写你的MySQL密码
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+    timeout: 3000ms
+  servlet:
+    multipart:
+      max-file-size: 10MB
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.sunyujie.picture_backend.model.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: delete_time
+      logic-delete-value: "now()"
+      logic-not-delete-value: "'1970-01-01 00:00:00'"
+
+sa-token:
+  # 请求头 Authorization，登录接口返回 token 字符串
+  token-name: Authorization
+  # 登录态有效期 24 小时（单位秒）
+  timeout: 86400
+  # 临时活跃超时不限制
+  active-timeout: -1
+  # 允许同一账号多端同时在线
+  is-concurrent: true
+  # 每次登录都签发新 token（不共用）
+  is-share: false
+  # token 风格：uuid
+  token-style: uuid
+  # 只从请求头读取，不读 cookie
+  is-read-cookie: false
+  is-read-header: true
+  # 关闭 sa-token 控制台日志
+  is-log: false
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: default
+      paths-to-match: /**
+      packages-to-scan: com.sunyujie.picture_backend
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+cos:
+  client:
+    # 腾讯云对象存储配置：以下四项请替换为你自己的值
+    # 注意：secretId / secretKey 属于敏感凭据，切勿提交到公开仓库
+    host: https://你的存储桶域名.cos.ap-xxx.myqcloud.com
+    secretId: 请填写你的腾讯云SecretId
+    secretKey: 请填写你的腾讯云SecretKey
+    region: ap-xxx
+    bucket: 你的存储桶名称

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sunyujie.picture_backend.mapper.PictureTagMapper">
+    <resultMap id="BaseResultMap" type="PictureTag">
+        <id column="id" property="id"/>
+        <result column="picture_id" property="pictureId"/>
+        <result column="tag_id" property="tagId"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+    <sql id="Base_Column_List">
+        id,
+        picture_id,
+        tag_id,
+        create_time
+    </sql>
+    <!--
+        标签分析：关联表 INNER JOIN 图片表（图片已删的脏关联直接不纳入）、
+        INNER JOIN 标签表取标签名（排除逻辑删除）；按标签分组统计图片数量和总大小。
+        scope 决定分析范围，与 AnalysisServiceImpl 的三种范围一一对应。
+    -->
+    <select id="queryTagAnalysis" resultType="com.sunyujie.picture_backend.model.vo.analysis.TagAnalysisVO">
+        SELECT
+            t.tag_name      AS tagName,
+            COUNT(*)        AS pictureCount,
+            SUM(p.pic_size) AS totalSize
+        FROM
+            picture_tag pt
+        INNER JOIN picture p ON pt.picture_id = p.id
+        INNER JOIN tag t ON pt.tag_id = t.id
+        WHERE
+            t.delete_time IS NULL
+            <if test="scope == @com.sunyujie.picture_backend.model.enums.AnalysisScopeEnum@PUBLIC_SPACE.value">
+                AND p.space_id IS NULL
+            </if>
+            <if test="scope == @com.sunyujie.picture_backend.model.enums.AnalysisScopeEnum@ALL_SPACE.value">
+                AND p.space_id IS NOT NULL
+            </if>
+            <if test="scope == @com.sunyujie.picture_backend.model.enums.AnalysisScopeEnum@SINGLE_SPACE.value">
+                AND p.space_id = #{spaceId}
+            </if>
+        GROUP BY
+            pt.tag_id,
+            t.tag_name
+        ORDER BY
+            totalSize DESC
+    </select>
+</mapper>
