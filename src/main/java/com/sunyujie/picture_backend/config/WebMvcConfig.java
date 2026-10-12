@@ -31,6 +31,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/picture/home/queryList",
                         "/category/queryList",
                         "/tag/queryList",
+                        "/picture/queryById",
+                        "/picture/search/picture",
                         // 接口文档（Knife4j / Swagger）
                         "/doc.html",
                         "/swagger-ui/**",
