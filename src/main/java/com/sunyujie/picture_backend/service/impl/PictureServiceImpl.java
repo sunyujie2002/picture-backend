@@ -614,10 +614,17 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
                 queryHomePictureRequest.getSortOrder(), queryHomePictureRequest.getTagIds());
         scopeCondition.accept(queryWrapper);
         Page<Picture> picturePage = baseMapper.selectPage(page, queryWrapper);
+        List<Long> userIds = picturePage.getRecords().stream()
+                .map(Picture::getUserId)
+                .collect(Collectors.toList());
+        Map<Long, String> userNameMap = userService.getUserNameMap(userIds);
         // 转换为 VO 分页对象
         List<HomePictureVO> pictureVOList = picturePage.getRecords().stream()
-                .map(item -> toVO(item, HomePictureVO.class))
-                .collect(Collectors.toList());
+                .map(item -> {
+                    HomePictureVO pictureVO = toVO(item, HomePictureVO.class);
+                    pictureVO.setUserName(userNameMap.get(item.getUserId()));
+                    return pictureVO;
+                }).collect(Collectors.toList());
         Page<HomePictureVO> pageVO = new Page<>(picturePage.getCurrent(), picturePage.getSize(),
                 picturePage.getTotal());
         pageVO.setRecords(pictureVOList);
@@ -634,8 +641,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
     public Page<PictureVO> queryPublicPictureList(QueryPictureRequest queryPictureRequest) {
         UserDTO user = UserContext.getLoginUser();
         // 公开图库管理列表：任何人（含管理员）都只看自己上传的图片，审核他人图片走 queryReviewPictureList
-        Consumer<QueryWrapper<Picture>> scopeCondition = queryWrapper ->
-                applyScopeCondition(queryWrapper, false, user, queryPictureRequest);
+        Consumer<QueryWrapper<Picture>> scopeCondition = queryWrapper -> applyScopeCondition(queryWrapper, false, user,
+                queryPictureRequest);
         return queryPictureList(queryPictureRequest, scopeCondition);
     }
 
@@ -654,8 +661,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         QueryPictureRequest queryPictureRequest = BeanUtil.copyProperties(queryHomePictureRequest,
                 QueryPictureRequest.class);
         UserDTO user = UserContext.getLoginUser();
-        Consumer<QueryWrapper<Picture>> scopeCondition = queryWrapper ->
-                applyScopeCondition(queryWrapper, true, user, queryPictureRequest);
+        Consumer<QueryWrapper<Picture>> scopeCondition = queryWrapper -> applyScopeCondition(queryWrapper, true, user,
+                queryPictureRequest);
         return queryPictureList(queryPictureRequest, scopeCondition);
     }
 
@@ -706,10 +713,17 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         scopeCondition.accept(queryWrapper);
         Page<Picture> page = new Page<>(queryPictureRequest.getPageNum(), queryPictureRequest.getPageSize());
         Page<Picture> picturePage = baseMapper.selectPage(page, queryWrapper);
+        List<Long> userIds = picturePage.getRecords().stream()
+                .map(Picture::getUserId)
+                .collect(Collectors.toList());
+        Map<Long, String> userNameMap = userService.getUserNameMap(userIds);
         // 转换为 VO 分页对象
         List<PictureVO> pictureVOList = picturePage.getRecords().stream()
-                .map(item -> toVO(item, PictureVO.class))
-                .collect(Collectors.toList());
+                .map(item -> {
+                    PictureVO pictureVO = toVO(item, PictureVO.class);
+                    pictureVO.setUserName(userNameMap.get(item.getUserId()));
+                    return pictureVO;
+                }).collect(Collectors.toList());
         Page<PictureVO> pageVO = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
         pageVO.setRecords(pictureVOList);
         return pageVO;
@@ -783,9 +797,17 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         long size = Math.max(1, pageSize);
         int fromIndex = (int) Math.min((current - 1) * size, total);
         int toIndex = (int) Math.min(fromIndex + size, total);
-        List<V> voList = pictureList.subList(fromIndex, toIndex).stream()
-                .map(item -> toVO(item, voClass))
+        List<Long> userIds = pictureList.subList(fromIndex, toIndex).stream()
+                .map(Picture::getUserId)
                 .collect(Collectors.toList());
+        Map<Long, String> userNameMap = userService.getUserNameMap(userIds);
+        // 转换为 VO 分页对象
+        List<V> voList = pictureList.subList(fromIndex, toIndex).stream()
+                .map(item -> {
+                    V v = toVO(item, voClass);
+                    BeanUtil.setProperty(v, "userName", userNameMap.get(item.getUserId()));
+                    return v;
+                }).collect(Collectors.toList());
         Page<V> pageVO = new Page<>(current, size, total);
         pageVO.setRecords(voList);
         return pageVO;
@@ -848,7 +870,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         ThrowUtil.throwIf(picture.getReviewStatus() != PictureReviewEnum.PASS.getValue() &&
                 !ObjectUtil.equals(picture.getUserId(), UserContext.getLoginUserId()),
                 ErrorCode.PARAMS_ERROR, "该图片未通过审核!");
-        return toVO(picture, HomePictureVO.class);
+        HomePictureVO homePictureVO = toVO(picture, HomePictureVO.class);
+        Map<Long, String> userNameMap = userService.getUserNameMap(List.of(picture.getUserId()));   
+        homePictureVO.setUserName(userNameMap.get(picture.getUserId()));
+        return homePictureVO;
     }
 
     /**
@@ -1011,7 +1036,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
      * 传了 spaceId：直接按 id 查空间（团队成员路径，个人 / 团队空间均可，按 id 操作无需是创建者）；
      * 不传 spaceId：默认当前登录用户的个人空间。
      *
-     * @param spaceId           前端传入的空间 id，可空
+     * @param spaceId            前端传入的空间 id，可空
      * @param requiredPermission 本次操作需要的图片权限
      */
     private Space resolveSpace(Long spaceId, SpacePermissionEnum requiredPermission) {

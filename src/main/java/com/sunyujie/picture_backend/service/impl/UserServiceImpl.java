@@ -44,6 +44,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.annotation.Resource;
@@ -451,10 +453,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (CollUtil.isEmpty(userIds)) {
             return Map.of();
         }
+        // 去重并剔除 null：列表场景同一用户可能出现多次（IN 对重复值不会出错也不会返回重复行，
+        // 但去重后 SQL 更短）；在公共方法内统一处理，调用方无需各自去重
+        Set<Long> distinctUserIds = userIds.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (distinctUserIds.isEmpty()) {
+            return Map.of();
+        }
         // 只查 id 和昵称两列；过滤掉用户名为 null 的记录，否则 Collectors.toMap 会抛 NPE
         return baseMapper.selectList(new LambdaQueryWrapper<User>()
                         .select(User::getId, User::getUserName)
-                        .in(User::getId, userIds))
+                        .in(User::getId, distinctUserIds))
                 .stream()
                 .filter(user -> StrUtil.isNotBlank(user.getUserName()))
                 .collect(Collectors.toMap(User::getId, User::getUserName));

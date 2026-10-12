@@ -3,6 +3,7 @@ package com.sunyujie.picture_backend.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sunyujie.picture_backend.common.BaseResponse;
 import com.sunyujie.picture_backend.common.DeleteRequest;
+import com.sunyujie.picture_backend.constant.PictureConstant;
 import com.sunyujie.picture_backend.exception.ErrorCode;
 import com.sunyujie.picture_backend.model.dto.picture.SavePictureRequest;
 import com.sunyujie.picture_backend.model.dto.picture.BatchUpdatePictureRequest;
@@ -125,7 +126,7 @@ public class PictureController {
         // 第2个参数：必须是 lambda () -> ...，只在两级缓存都未命中时才执行；
         // 直接写 pictureService.queryPictureById(id) 会在调用前就执行查询，缓存形同虚设
         HomePictureVO HomePictureVO = MultiLevelCacheUtil.getWithCache(
-                "picture:picture:queryById:" + id,
+                PictureConstant.PICTURE_VO_CACHE_KEY_PREFIX + id,
                 () -> pictureService.queryPictureById(id));
         return ResultUtil.success(HomePictureVO, "查询成功");
     }

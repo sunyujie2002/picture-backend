@@ -79,6 +79,11 @@ public class HomePictureVO implements Serializable {
     private Long userId;
 
     /**
+     * 创建用户名称
+     */
+    private String userName;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createTime;
