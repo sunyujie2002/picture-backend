@@ -53,7 +53,12 @@ public class CosManager {
     }
 
     /**
-     * 上传图片，同时由数据万象生成主图 webp 和缩略图 webp
+     * 上传图片，并由数据万象生成缩略图 webp
+     * <p>
+     * 主图保持用户上传的原始格式（jpg / png / gif / webp），不做转码：
+     * 主图是"资产原件"，转码后会丢掉 gif 动画、png 透明通道，且用户下载到的不再是自己上传的文件，
+     * 排查问题也拿不到原始素材；缩略图只是列表/卡片用的派生图，转 webp 省流量且随时可由原图重新生成，
+     * 因此只对缩略图做 webp 转换，这样既保真又兼顾传输性能。
      *
      * @param key  原图 key
      * @param file 本地文件
@@ -67,17 +72,21 @@ public class CosManager {
         picOperations.setIsPicInfo(1);
         List<PicOperations.Rule> rules = new ArrayList<>();
         String mainName = FileUtil.mainName(key);
-        // 规则1：主图转 webp（CI 按文件内容识别原图格式，不看 key 后缀）
-        PicOperations.Rule rule = new PicOperations.Rule();
-        rule.setRule("imageMogr2/format/webp");
-        rule.setBucket(cosClientConfig.getBucket());
-        rule.setFileId(mainName + ".webp");
-        rules.add(rule);
-        // 规则2：缩略图转 webp（imageView2 模式 2，限框等比不裁剪）
+        // 【已停用：主图统一转 webp，保留代码备查，勿删】
+        // 停用原因见方法注释（主图转码不可逆、丢失动图/透明通道、用户下载到的不是原文件）。
+        // 恢复方式：放开下面 5 行，并同步恢复 AbstractPictureUploader#upload 中
+        // "主图取 webp 产物、原图异步删除" 的分支（产物顺序与规则顺序一致，放开后 objectList.get(0) 是主图 webp）。
+        // PicOperations.Rule rule = new PicOperations.Rule();
+        // rule.setRule("imageMogr2/format/webp");
+        // rule.setBucket(cosClientConfig.getBucket());
+        // rule.setFileId(mainName + ".webp");
+        // rules.add(rule);
+        // 规则1：缩略图转 webp（imageView2 模式 2，限框等比不裁剪）
         PicOperations.Rule thumbnailRule = new PicOperations.Rule();
         thumbnailRule.setRule(PictureConstant.THUMBNAIL_RULE);
         thumbnailRule.setBucket(cosClientConfig.getBucket());
-        thumbnailRule.setFileId(mainName + PictureConstant.THUMBNAIL_FILE_TAG + ".webp");
+        thumbnailRule.setFileId(mainName + PictureConstant.THUMBNAIL_FILE_TAG + "."
+                + PictureConstant.THUMBNAIL_FORMAT);
         rules.add(thumbnailRule);
         picOperations.setRules(rules);
         // 构造处理参数

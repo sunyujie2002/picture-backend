@@ -238,7 +238,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             picHash = computePicHash(url);
             // 公共字段
             String filename = FileUtil.mainName(url);
-            String picFormat = newPicture.getPicFormat();
+            // 主图保留上传时的原始格式（jpg / png / gif / webp），格式缺失时用文件后缀兜底
+            String picFormat = StrUtil.isNotBlank(newPicture.getPicFormat()) ? newPicture.getPicFormat()
+                    : FileUtil.getSuffix(url);
             String tempPrefix = PictureConstant.TEMP_IMAGE_DIR_PREFIX
                     + UserContext.getLoginUserId();
             String publicPrefix = PictureConstant.PUBLIC_IMAGE_DIR_PREFIX
@@ -257,8 +259,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             cosManager.copyObject(url, isSpacePicture ? privateUrl : publicUrl);
             // 缩略图同样从临时目录迁移到正式目录；无缩略图则置 null
             if (StrUtil.isNotBlank(thumbnailUrl)) {
-                // 构建正式目录 key（缩略图）
-                String thumbnailFile = String.format("/%s_thumb.%s", filename, picFormat);
+                // 构建正式目录 key（缩略图）：缩略图恒为 webp，后缀固定，不跟主图格式走
+                String thumbnailFile = String.format("/%s%s.%s", filename, PictureConstant.THUMBNAIL_FILE_TAG,
+                        PictureConstant.THUMBNAIL_FORMAT);
                 publicThumbnailUrl = publicPrefix + thumbnailFile;
                 privateThumbnailUrl = privatePrefix + thumbnailFile;
                 // 复制正式目录（缩略图）

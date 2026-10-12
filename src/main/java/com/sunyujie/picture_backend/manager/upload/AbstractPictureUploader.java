@@ -22,6 +22,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.NumberUtil;
+import cn.hutool.core.util.StrUtil;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -64,38 +65,48 @@ public abstract class AbstractPictureUploader<T> {
             // 原图 key 不带后缀：COS key 只是字符串标识，CI 按内容识别格式，且原图传完即删
             String cosPath = PictureConstant.TEMP_IMAGE_DIR_PREFIX + UserContext.getLoginUserId()
                     + file;
-            // 步骤5：上传到 COS，CI 同时生成 webp
+            // 步骤5：上传到 COS，CI 只生成缩略图 webp，主图即原图
             PutObjectResult putObjectResult = cosManager.putPictureObject(cosPath, tempFile);
             // 步骤6：以 CI 按图片内容返回的真实格式为准（改后缀名也骗不过它）
             ImageInfo imageInfo = putObjectResult.getCiUploadResult().getOriginalInfo().getImageInfo();
-            // 产物顺序与规则顺序一致：[0] 主图 webp，[1] 缩略图 webp
             List<CIObject> objectList = putObjectResult.getCiUploadResult().getProcessResults().getObjectList();
-            String finalUrl;
-            long finalSize;
+            // 主图保留原图：原图就是最终产物，不再取转码产物，也不再删除原图
+            String finalUrl = cosPath;
+            long finalSize = FileUtil.size(tempFile);
             String thumbnailUrl = null;
             if (CollUtil.isNotEmpty(objectList)) {
-                CIObject webpObject = objectList.get(0);
-                CIObject thumbnailObject = objectList.size() > 1 ? objectList.get(1) : null;
-                finalUrl = webpObject.getKey();
-                finalSize = webpObject.getSize();
-                if (!"webp".equals(imageInfo.getFormat())) {
-                    // 其他格式：主图使用 webp 产物，原图异步删除（后续以图搜图指纹算的是 webp 产物，原图不再使用；temp 另有 24h 兜底）
-                    asyncFileManager.deleteFile(cosPath);
-                }
+                // 产物顺序与规则顺序一致：当前只有一条规则，[0] 即缩略图 webp
+                CIObject thumbnailObject = objectList.get(0);
                 // 缩略图仅在"确实比主图小"时采用；转缩略图后反而变大的不处理，删除产物，前端回退用主图
-                if (thumbnailObject != null && thumbnailObject.getSize() < finalSize) {
+                if (thumbnailObject.getSize() < finalSize) {
                     thumbnailUrl = thumbnailObject.getKey();
-                } else if (thumbnailObject != null) {
+                } else {
                     log.info("thumbnail is not smaller than source image, skip it, key = {}",
                             thumbnailObject.getKey());
                     asyncFileManager.deleteFile(thumbnailObject.getKey());
                 }
-            } else {
-                // 降级：所有处理均失败，直接使用原图，无缩略图
-                finalUrl = cosPath;
-                finalSize = FileUtil.size(tempFile);
             }
-            return buildUploadPictureVO(imageInfo, finalUrl, originalFilename, finalSize, thumbnailUrl);
+            // 【已停用：主图统一转 webp，保留代码备查，勿删】
+            // 恢复方式：放开下面这段，并同步恢复 CosManager#putPictureObject 中主图转码规则
+            // （放开后产物顺序为 [0] 主图 webp、[1] 缩略图 webp）
+            // String finalUrl;
+            // long finalSize;
+            // if (CollUtil.isNotEmpty(objectList)) {
+            //     CIObject webpObject = objectList.get(0);
+            //     CIObject thumbnailObject = objectList.size() > 1 ? objectList.get(1) : null;
+            //     finalUrl = webpObject.getKey();
+            //     finalSize = webpObject.getSize();
+            //     if (!"webp".equals(imageInfo.getFormat())) {
+            //         // 其他格式：主图使用 webp 产物，原图异步删除（temp 另有 24h 兜底）
+            //         asyncFileManager.deleteFile(cosPath);
+            //     }
+            // } else {
+            //     finalUrl = cosPath;
+            //     finalSize = FileUtil.size(tempFile);
+            // }
+            // 图片格式以 CI 识别的真实格式为准（jpeg 统一写成 jpg），保证存库格式与文件真实内容一致
+            String realFormat = normalizePicFormat(imageInfo.getFormat(), cosPath);
+            return buildUploadPictureVO(imageInfo, finalUrl, originalFilename, finalSize, thumbnailUrl, realFormat);
         } catch (Exception e) {
             log.error("file upload error", e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
@@ -118,9 +129,10 @@ public abstract class AbstractPictureUploader<T> {
      * @param originalFilename 原始文件名（展示用）
      * @param size             最终主图体积
      * @param thumbnailUrl     缩略图 url，为 null 表示无可用缩略图
+     * @param picFormat        主图真实格式（jpg / png / gif / webp）
      */
     private UploadPictureVO buildUploadPictureVO(ImageInfo imageInfo, String fileUrl, String originalFilename,
-            long size, String thumbnailUrl) {
+            long size, String thumbnailUrl, String picFormat) {
         int picWidth = imageInfo.getWidth();
         int picHeight = imageInfo.getHeight();
         String picColor = imageInfo.getAve();
@@ -133,11 +145,24 @@ public abstract class AbstractPictureUploader<T> {
         uploadPictureVO.setPicHeight(picHeight);
         uploadPictureVO.setPicColor(picColor);
         uploadPictureVO.setPicName(FileUtil.mainName(originalFilename));
-        // 格式直接取最终文件后缀（所有最终 key 都带正确后缀）
-        uploadPictureVO.setPicFormat(FileUtil.getSuffix(fileUrl));
+        // 格式用 CI 识别出的真实格式（主图不再转码，后缀可能仍是上传时的后缀，不能盲信）
+        uploadPictureVO.setPicFormat(picFormat);
         uploadPictureVO.setPicScale(picScale);
         uploadPictureVO.setPicSize(size);
         return uploadPictureVO;
+    }
+
+    /**
+     * 归一化图片格式：优先用数据万象按内容识别出的真实格式（改后缀骗不过它），
+     * 识别不到时回退到文件 key 后缀；jpeg 统一写成 jpg，避免同一格式存成两种值
+     *
+     * @param ciFormat    CI 返回的格式
+     * @param fallbackKey 原图 key（取后缀兜底）
+     */
+    private String normalizePicFormat(String ciFormat, String fallbackKey) {
+        String format = StrUtil.isNotBlank(ciFormat) ? ciFormat.trim().toLowerCase()
+                : FileUtil.getSuffix(fallbackKey).toLowerCase();
+        return "jpeg".equals(format) ? "jpg" : format;
     }
 
     /**

@@ -63,6 +63,11 @@ public interface PictureConstant {
     String THUMBNAIL_RULE = "imageView2/2/w/200/h/200/format/webp";
 
     /**
+     * 缩略图固定输出格式（与主图格式无关，主图保留原始格式，缩略图统一 webp 省流量）
+     */
+    String THUMBNAIL_FORMAT = "webp";
+
+    /**
      * 图片详情多级缓存 key 前缀（拼接图片 id）；
      * 生产端（queryById）和清理端（evict / AsyncCacheManager）共用，避免拼写漂移
      */
