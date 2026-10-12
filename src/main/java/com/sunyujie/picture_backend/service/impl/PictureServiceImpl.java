@@ -770,7 +770,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
                 "颜色格式不正确，应为 #RRGGBB");
         // 颜色距离排序在内存完成，不需要 SQL 排序，sortField/sortOrder 传 null
         QueryWrapper<Picture> queryWrapper = buildQueryWrapper(picture, null, null, tagIds);
-        queryWrapper.isNotNull("pic_color");
+        // 必须同时排除 NULL 和空字符串：存量数据存在 pic_color=''（非 NULL）的记录，
+        // 只排 NULL 会让空串进入内存排序，parseRgb 校验 blank 时直接抛异常
+        queryWrapper.isNotNull("pic_color").ne("pic_color", "");
         scopeCondition.accept(queryWrapper);
         List<Picture> pictureList = baseMapper.selectList(queryWrapper);
         // 与目标颜色的感知距离升序：颜色越接近排名越靠前

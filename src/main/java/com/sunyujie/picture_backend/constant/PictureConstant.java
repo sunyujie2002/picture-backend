@@ -30,7 +30,7 @@ public interface PictureConstant {
     /**
      * 最大文件大小
      */
-    long MAX_FILE_SIZE = 1024 * 1024 * 5L;
+    long MAX_FILE_SIZE = 1024 * 1024 * 10L;
 
     /**
      * 允许的文件类型
