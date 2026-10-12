@@ -17,9 +17,4 @@ public class CategoryVO {
      * 分类名称
      */
     private String categoryName;
-
-    /**
-     * 排序值（越小越靠前）
-     */
-    private Integer sort;
 }

@@ -17,9 +17,4 @@ public class TagVO {
      * 标签名称
      */
     private String tagName;
-
-    /**
-     * 排序值（越小越靠前）
-     */
-    private Integer sort;
 }

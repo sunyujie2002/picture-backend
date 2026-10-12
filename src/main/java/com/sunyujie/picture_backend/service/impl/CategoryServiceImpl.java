@@ -8,7 +8,6 @@ import java.util.stream.Collectors;
 import javax.annotation.Resource;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -129,7 +128,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
         // 按管理端配置的排序值返回，排序值相同时用 id 兜底保证顺序稳定
         List<Category> categoryList = lambdaQuery()
                 .orderByAsc(Category::getSort)
-                .orderByAsc(Category::getId)
+                .orderByDesc(Category::getEditTime)
                 .list();
         return BeanUtil.copyToList(categoryList, CategoryVO.class);
     }
@@ -139,7 +138,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
     public List<Category> queryAdminCategoryList() {
         return lambdaQuery()
                 .orderByAsc(Category::getSort)
-                .orderByAsc(Category::getId)
+                .orderByDesc(Category::getEditTime)
                 .list();
     }
 

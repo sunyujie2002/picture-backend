@@ -1,7 +1,6 @@
 package com.sunyujie.picture_backend.service.impl;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -20,7 +19,6 @@ import com.sunyujie.picture_backend.mapper.PictureTagMapper;
 import com.sunyujie.picture_backend.mapper.TagMapper;
 import com.sunyujie.picture_backend.model.dto.tag.AddTagRequest;
 import com.sunyujie.picture_backend.model.dto.tag.UpdateTagRequest;
-import com.sunyujie.picture_backend.model.entity.Category;
 import com.sunyujie.picture_backend.model.entity.PictureTag;
 import com.sunyujie.picture_backend.model.entity.Tag;
 import com.sunyujie.picture_backend.model.vo.tag.TagVO;
@@ -124,7 +122,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
         // 按管理端配置的排序值返回，排序值相同时用 id 兜底保证顺序稳定
         List<Tag> tagList = lambdaQuery()
                 .orderByAsc(Tag::getSort)
-                .orderByAsc(Tag::getId)
+                .orderByDesc(Tag::getEditTime)
                 .list();
         return BeanUtil.copyToList(tagList, TagVO.class);
     }
@@ -134,7 +132,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     public List<Tag> queryAdminTagList() {
         return lambdaQuery()
                 .orderByAsc(Tag::getSort)
-                .orderByAsc(Tag::getId)
+                .orderByDesc(Tag::getEditTime)
                 .list();
     }
 
