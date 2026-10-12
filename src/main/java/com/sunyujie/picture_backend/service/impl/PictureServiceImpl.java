@@ -201,9 +201,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         String url = newPicture.getUrl();
         String thumbnailUrl = newPicture.getThumbnailUrl();
         Boolean isSpacePicture = ObjectUtil.isNotEmpty(newPicture.getSpaceId());
-        if (!isSpacePicture) {
-            ThrowUtil.throwIf(ObjectUtil.isEmpty(categoryId), ErrorCode.PARAMS_ERROR, "分类不能为空");
-        }
+        ThrowUtil.throwIf(ObjectUtil.isEmpty(categoryId), ErrorCode.PARAMS_ERROR, "分类不能为空");
         ThrowUtil.throwIf(StrUtil.isBlank(picName), ErrorCode.PARAMS_ERROR, "图片名称不能为空");
         ThrowUtil.throwIf(StrUtil.isBlank(url), ErrorCode.PARAMS_ERROR, "图片链接不能为空");
         String publicThumbnailUrl = null;
