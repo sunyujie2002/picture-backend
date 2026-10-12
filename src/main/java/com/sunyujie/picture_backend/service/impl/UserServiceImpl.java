@@ -75,8 +75,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String userAccount = registerRequest.getUserAccount();
         String userPassword = registerRequest.getUserPassword();
         String confirmPassword = registerRequest.getConfirmPassword();
-        ThrowUtil.throwIf(StrUtil.hasBlank(userAccount, userPassword, confirmPassword), ErrorCode.PARAMS_ERROR,
-                "用户名、密码或确认密码不能为空");
         ThrowUtil.throwIf(!userPassword.equals(confirmPassword), ErrorCode.PARAMS_ERROR, "两次输入密码不一致");
         LambdaQueryWrapper<User> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         ThrowUtil.throwIf(
@@ -108,8 +106,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public String login(LoginRequest loginRequest) {
         String userAccount = loginRequest.getUserAccount();
         String userPassword = loginRequest.getUserPassword();
-        ThrowUtil.throwIf(StrUtil.hasBlank(userAccount, userPassword), ErrorCode.PARAMS_ERROR,
-                "用户名或密码不能为空");
         LambdaQueryWrapper<User> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         User user = baseMapper.selectOne(lambdaQueryWrapper.eq(User::getUserAccount, userAccount));
         ThrowUtil.throwIf(user == null, ErrorCode.PARAMS_ERROR, "用户名不存在或密码错误");

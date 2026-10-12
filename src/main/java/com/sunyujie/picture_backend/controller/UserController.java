@@ -34,13 +34,13 @@ public class UserController {
     private UserService userService;
     
     @PostMapping("/register")
-    public BaseResponse<Long> register(@RequestBody RegisterRequest registerRequest) {
+    public BaseResponse<Long> register(@Valid @RequestBody RegisterRequest registerRequest) {
         Long userId = userService.register(registerRequest);
         return ResultUtil.success(userId, "注册成功");
     }
 
     @PostMapping("/login")
-    public BaseResponse<String> login(@RequestBody LoginRequest loginRequest) {
+    public BaseResponse<String> login(@Valid @RequestBody LoginRequest loginRequest) {
         String token = userService.login(loginRequest);
         return ResultUtil.success(token, "登录成功");
     }
