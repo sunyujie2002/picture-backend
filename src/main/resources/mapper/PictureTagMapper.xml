@@ -14,9 +14,12 @@
         create_time
     </sql>
     <!--
-        标签分析：关联表 INNER JOIN 图片表（图片已删的脏关联直接不纳入）、
-        INNER JOIN 标签表取标签名（排除逻辑删除）；按标签分组统计图片数量和总大小。
-        scope 决定分析范围，与 AnalysisServiceImpl 的三种范围一一对应。
+        标签分析：关联表 INNER JOIN 图片表、INNER JOIN 标签表取标签名；
+        按标签分组统计图片数量和总大小。scope 决定分析范围，与 AnalysisServiceImpl 的三种范围一一对应。
+        注意：手写 SQL 不经过 MyBatis-Plus 自动逻辑删除拼接，必须显式写正常行条件。
+        正常行口径与 application.yml 的 logic-not-delete-value 一致：delete_time = '1970-01-01 00:00:00'
+        （不能写 IS NULL，本项目正常行存的是纪元时间，写 IS NULL 会导致结果恒为空）。
+        picture_tag 为物理删除表，无 delete_time，无需条件。
     -->
     <select id="queryTagAnalysis" resultType="com.sunyujie.picture_backend.model.vo.analysis.TagAnalysisVO">
         SELECT
@@ -28,7 +31,8 @@
         INNER JOIN picture p ON pt.picture_id = p.id
         INNER JOIN tag t ON pt.tag_id = t.id
         WHERE
-            t.delete_time IS NULL
+            t.delete_time = '1970-01-01 00:00:00'
+            AND p.delete_time = '1970-01-01 00:00:00'
             <if test="scope == @com.sunyujie.picture_backend.model.enums.AnalysisScopeEnum@PUBLIC_SPACE.value">
                 AND p.space_id IS NULL
             </if>
