@@ -30,6 +30,12 @@ public class Category implements Serializable {
     private String categoryName;
 
     /**
+     * 排序值：越小越靠前（管理端可拖拽调整，新增时未指定则取当前最大值 + 1）
+     */
+    @TableField("sort")
+    private Integer sort;
+
+    /**
      * 创建时间
      */
     @TableField("create_time")

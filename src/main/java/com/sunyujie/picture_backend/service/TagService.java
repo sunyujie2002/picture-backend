@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.sunyujie.picture_backend.common.DeleteRequest;
+import com.sunyujie.picture_backend.common.SortBatchRequest;
 import com.sunyujie.picture_backend.model.dto.tag.AddTagRequest;
 import com.sunyujie.picture_backend.model.dto.tag.UpdateTagRequest;
 import com.sunyujie.picture_backend.model.entity.Tag;
@@ -39,7 +40,15 @@ public interface TagService extends IService<Tag> {
     Boolean deleteTag(DeleteRequest deleteRequest);
 
     /**
-     * 查询标签列表（普通用户：id、名称、所属分类）
+     * 批量更新标签排序（仅管理员）
+     *
+     * @param sortBatchRequest 排序项列表（id + 排序值）
+     * @return 是否成功
+     */
+    Boolean updateTagSort(SortBatchRequest sortBatchRequest);
+
+    /**
+     * 查询标签列表（普通用户：id、名称、所属分类），按排序值升序
      *
      * @return 标签 VO 列表
      */

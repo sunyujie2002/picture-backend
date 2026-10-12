@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.sunyujie.picture_backend.common.BaseResponse;
 import com.sunyujie.picture_backend.common.DeleteRequest;
+import com.sunyujie.picture_backend.common.SortBatchRequest;
 import com.sunyujie.picture_backend.model.dto.tag.AddTagRequest;
 import com.sunyujie.picture_backend.model.dto.tag.UpdateTagRequest;
 import com.sunyujie.picture_backend.model.entity.Tag;
@@ -59,5 +60,13 @@ public class TagController {
     @PostMapping("/admin/delete")
     public BaseResponse<Boolean> deleteTag(@RequestBody DeleteRequest deleteRequest) {
         return ResultUtil.success(tagService.deleteTag(deleteRequest), "标签删除成功");
+    }
+
+    /**
+     * 批量更新排序（管理端拖拽排序后调用）
+     */
+    @PostMapping("/admin/updateSort")
+    public BaseResponse<Boolean> updateTagSort(@Valid @RequestBody SortBatchRequest sortBatchRequest) {
+        return ResultUtil.success(tagService.updateTagSort(sortBatchRequest), "排序已保存");
     }
 }

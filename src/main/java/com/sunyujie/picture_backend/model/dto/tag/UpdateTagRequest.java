@@ -6,7 +6,7 @@ import javax.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 更新标签请求（仅管理员）：仅可更新标签名称
+ * 更新标签请求（仅管理员）：可更新标签名称与排序值
  */
 @Data
 public class UpdateTagRequest {
@@ -22,4 +22,9 @@ public class UpdateTagRequest {
      */
     @NotBlank(message = "标签名称不能为空")
     private String tagName;
+
+    /**
+     * 排序值（越小越靠前）；不传表示不改动排序
+     */
+    private Integer sort;
 }

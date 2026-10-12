@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.sunyujie.picture_backend.common.DeleteRequest;
+import com.sunyujie.picture_backend.common.SortBatchRequest;
 import com.sunyujie.picture_backend.model.dto.category.AddCategoryRequest;
 import com.sunyujie.picture_backend.model.dto.category.UpdateCategoryRequest;
 import com.sunyujie.picture_backend.model.entity.Category;
@@ -40,14 +41,22 @@ public interface CategoryService extends IService<Category> {
     Boolean deleteCategory(DeleteRequest deleteRequest);
 
     /**
-     * 查询分类列表（普通用户：仅 id 和名称）
+     * 批量更新分类排序（仅管理员）
+     *
+     * @param sortBatchRequest 排序项列表（id + 排序值）
+     * @return 是否成功
+     */
+    Boolean updateCategorySort(SortBatchRequest sortBatchRequest);
+
+    /**
+     * 查询分类列表（普通用户：仅 id 和名称），按排序值升序
      *
      * @return 分类 VO 列表
      */
     List<CategoryVO> queryCategoryList();
 
     /**
-     * 查询管理员分类列表（仅管理员：包含完整字段）
+     * 查询管理员分类列表（仅管理员：包含完整字段），按排序值升序
      *
      * @return 分类实体列表
      */

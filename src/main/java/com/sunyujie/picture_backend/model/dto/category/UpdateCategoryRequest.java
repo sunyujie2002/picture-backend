@@ -22,4 +22,9 @@ public class UpdateCategoryRequest {
      */
     @NotBlank(message = "分类名称不能为空")
     private String categoryName;
+
+    /**
+     * 排序值（越小越靠前）；不传表示不改动排序
+     */
+    private Integer sort;
 }

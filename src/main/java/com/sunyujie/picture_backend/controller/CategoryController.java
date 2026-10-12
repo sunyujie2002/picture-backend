@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.sunyujie.picture_backend.common.BaseResponse;
 import com.sunyujie.picture_backend.common.DeleteRequest;
+import com.sunyujie.picture_backend.common.SortBatchRequest;
 import com.sunyujie.picture_backend.model.dto.category.AddCategoryRequest;
 import com.sunyujie.picture_backend.model.dto.category.UpdateCategoryRequest;
 import com.sunyujie.picture_backend.model.entity.Category;
@@ -60,5 +61,14 @@ public class CategoryController {
     @PostMapping("/admin/delete")
     public BaseResponse<Boolean> deleteCategory(@RequestBody DeleteRequest deleteRequest) {
         return ResultUtil.success(categoryService.deleteCategory(deleteRequest), "分类删除成功");
+    }
+
+    /**
+     * 批量更新排序（管理端拖拽排序后调用）
+     */
+    @PostMapping("/admin/updateSort")
+    public BaseResponse<Boolean> updateCategorySort(
+            @Valid @RequestBody SortBatchRequest sortBatchRequest) {
+        return ResultUtil.success(categoryService.updateCategorySort(sortBatchRequest), "排序已保存");
     }
 }
