@@ -5,6 +5,7 @@
     <resultMap id="BaseResultMap" type="Category">
         <id column="id" property="id" />
         <result column="category_name" property="categoryName" />
+        <result column="sort" property="sort" />
         <result column="create_time" property="createTime" />
         <result column="edit_time" property="editTime" />
         <result column="update_time" property="updateTime" />
@@ -14,6 +15,7 @@
     <sql id="Base_Column_List">
         id,
         category_name,
+        sort,
         create_time,
         edit_time,
         update_time,

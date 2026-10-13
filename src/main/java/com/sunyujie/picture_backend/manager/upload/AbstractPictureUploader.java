@@ -17,6 +17,7 @@ import com.sunyujie.picture_backend.exception.ErrorCode;
 import com.sunyujie.picture_backend.manager.CosManager;
 import com.sunyujie.picture_backend.manager.async.AsyncFileManager;
 import com.sunyujie.picture_backend.model.vo.picture.UploadPictureVO;
+import com.sunyujie.picture_backend.utils.PictureColorUtil;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
@@ -106,7 +107,7 @@ public abstract class AbstractPictureUploader<T> {
             // }
             // 图片格式以 CI 识别的真实格式为准（jpeg 统一写成 jpg），保证存库格式与文件真实内容一致
             String realFormat = normalizePicFormat(imageInfo.getFormat(), cosPath);
-            return buildUploadPictureVO(imageInfo, finalUrl, originalFilename, finalSize, thumbnailUrl, realFormat);
+            return buildUploadPictureVO(imageInfo, tempFile, finalUrl, originalFilename, finalSize, thumbnailUrl, realFormat);
         } catch (Exception e) {
             log.error("file upload error", e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
@@ -125,17 +126,23 @@ public abstract class AbstractPictureUploader<T> {
      * 构建上传返回 VO
      *
      * @param imageInfo        原图信息（宽高）
+     * @param tempFile         本地临时原图文件（用于提取主色调）
      * @param fileUrl          最终主图 url
      * @param originalFilename 原始文件名（展示用）
      * @param size             最终主图体积
      * @param thumbnailUrl     缩略图 url，为 null 表示无可用缩略图
      * @param picFormat        主图真实格式（jpg / png / gif / webp）
      */
-    private UploadPictureVO buildUploadPictureVO(ImageInfo imageInfo, String fileUrl, String originalFilename,
-            long size, String thumbnailUrl, String picFormat) {
+    private UploadPictureVO buildUploadPictureVO(ImageInfo imageInfo, File tempFile, String fileUrl,
+            String originalFilename, long size, String thumbnailUrl, String picFormat) {
         int picWidth = imageInfo.getWidth();
         int picHeight = imageInfo.getHeight();
-        String picColor = imageInfo.getAve();
+        // 主色调自研提取（CI 的 Ave 是失真的平均色，明亮图会被算成暗色，颜色检索基本查不到）；
+        // ImageIO 不支持的格式（如 webp）返回 null 时回退 CI 的 Ave
+        String picColor = PictureColorUtil.dominantColor(tempFile);
+        if (StrUtil.isBlank(picColor)) {
+            picColor = imageInfo.getAve();
+        }
         double picScale = NumberUtil.round((double) picWidth / picHeight, 2).doubleValue();
         // 步骤7：构建返回 VO
         UploadPictureVO uploadPictureVO = new UploadPictureVO();

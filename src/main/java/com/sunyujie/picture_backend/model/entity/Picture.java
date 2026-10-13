@@ -84,7 +84,16 @@ public class Picture implements Serializable {
     private String picFormat;
 
     /**
-     * 图片感知哈希指纹（以图搜图用）
+     * 图片语义向量（CLIP ViT-B/32，512 维，已 L2 归一化，逗号分隔存储；以图搜图用）。
+     * 由离线批处理脚本（本机/任意有内存机器）计算并回写，线上搜索只做余弦相似度（不加载模型）。
+     */
+    @TableField("pic_vector")
+    private String picVector;
+
+    /**
+     * 图片感知哈希指纹（pHash，64 位）：仅用于「上传查重」，不参与相似推荐。
+     * 相似推荐已改用 CLIP 语义向量（picVector）；pHash 保留是因为它能识别
+     * "同一张图的压缩/缩放/裁剪版本"这种真正的重复文件，查重比语义向量更可靠。
      */
     @TableField("pic_hash")
     private Long picHash;

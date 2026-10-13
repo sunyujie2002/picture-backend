@@ -1,6 +1,8 @@
 package com.sunyujie.picture_backend.manager;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,6 +52,19 @@ public class CosManager {
     public COSObject getObject(String key) {
         GetObjectRequest getObjectRequest = new GetObjectRequest(cosClientConfig.getBucket(), key);
         return cosClient.getObject(getObjectRequest);
+    }
+
+    /**
+     * 把 COS 对象下载到本地文件（上传时算 pHash 查重用）
+     *
+     * @param key  唯一键
+     * @param file 本地目标文件
+     */
+    public void downloadToFile(String key, File file) throws IOException {
+        COSObject cosObject = cosClient.getObject(new GetObjectRequest(cosClientConfig.getBucket(), key));
+        try (InputStream in = cosObject.getObjectContent()) {
+            FileUtil.writeFromStream(in, file);
+        }
     }
 
     /**

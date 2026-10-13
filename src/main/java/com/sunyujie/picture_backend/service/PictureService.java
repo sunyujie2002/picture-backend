@@ -159,7 +159,7 @@ public interface PictureService extends IService<Picture> {
     HomePictureVO queryPictureById(Long id);
 
     /**
-     * 以图搜图：基于感知哈希在库内检索相似图片，最多返回 SIMILAR_PICTURE_COUNT 条
+     * 以图搜图：基于 CLIP 语义向量在库内做余弦相似检索，最多返回 SIMILAR_PICTURE_COUNT 条
      *
      * @param pictureId 图片id
      * @return 相似图片列表，无相似图片时为空列表

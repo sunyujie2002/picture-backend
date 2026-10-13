@@ -88,9 +88,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> implements PictureService {
     @Resource
-    private CosManager cosManager;
-
-    @Resource
     private CosClientConfig cosClientConfig;
 
     @Resource
@@ -104,6 +101,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
 
     @Resource
     private TransactionTemplate transactionTemplate;
+
     /**
      * 上传类是无状态单例，直接注入即可
      */
@@ -118,6 +116,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
 
     @Resource
     private SpaceAuthManager spaceAuthManager;
+
+    @Resource
+    private CosManager cosManager;
 
     @Override
     public UploadPictureVO uploadPicture(MultipartFile multipartFile) {
@@ -208,7 +209,6 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         String privateThumbnailUrl = null;
         String publicUrl;
         String privateUrl;
-        Long picHash = null;
         // 当新增图片或更新图片 url 变了，需要重新更新图片信息
         if (ObjectUtil.isEmpty(oldPicture) || !oldPicture.getUrl().equals(url)) {
             if (isSpacePicture) {
@@ -233,9 +233,6 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
                             "空间已满,无法更新图片");
                 }
             }
-            // 计算感知哈希指纹（以图搜图用）：指纹是服务端内部实现，不经过前端，
-            // 此时文件还在临时目录，下载现算；只有新增/换图才触发
-            picHash = computePicHash(url);
             // 公共字段
             String filename = FileUtil.mainName(url);
             // 主图保留上传时的原始格式（jpg / png / gif / webp），格式缺失时用文件后缀兜底
@@ -273,8 +270,24 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             newPicture.setThumbnailUrl(isSpacePicture ? privateThumbnailUrl : publicThumbnailUrl);
         }
         newPicture.setUserId(UserContext.getLoginUserId());
-        newPicture.setPicHash(picHash);
         fillReviewFields(newPicture);
+        // pHash 指纹：仅用于「上传查重」（识别同一张图的压缩/缩放/裁剪版本），不参与相似推荐。
+        // 只对审核通过的图片计算：未过审的图不可见，没必要为它下载原图（省流量/算力），
+        // 过审后由离线批处理脚本补算。更新且 url 未变则沿用旧指纹，避免重复下载计算
+        if (ObjectUtil.isEmpty(oldPicture) || !oldPicture.getUrl().equals(url)) {
+            if (Integer.valueOf(1).equals(newPicture.getReviewStatus())) {
+                Long picHash = computePicHash(newPicture.getUrl());
+                // 查重范围严格隔离：公共图库只跟公共图库比，空间内只跟同一 spaceId 比
+                checkDuplicatePicture(picHash, newPicture.getSpaceId(),
+                        ObjectUtil.isEmpty(oldPicture) ? null : oldPicture.getId());
+                newPicture.setPicHash(picHash);
+            } else {
+                // 未过审：不下载原图、不算指纹，留空等过审后由批处理补算
+                newPicture.setPicHash(null);
+            }
+        } else {
+            newPicture.setPicHash(oldPicture.getPicHash());
+        }
         // 新增与修改的分支判断
         if (!ObjectUtil.isEmpty(oldPicture)) {
             newPicture.setEditTime(LocalDateTime.now());
@@ -287,13 +300,52 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
     }
 
     /**
-     * 从 COS 下载图片计算感知哈希指纹，失败时只记日志返回 null（不阻断保存流程）
+     * 上传查重：同一范围内是否已存在"同一张图"（pHash 汉明距离 ≤ PHASH_DUPLICATE_DISTANCE）
+     * <p>
+     * 范围严格隔离，避免跨空间/跨公私有串库：
+     * - 公共图库（spaceId 为空）只与 space_id IS NULL 的图片比较
+     * - 空间内图片只与同一 space_id 的图片比较
+     * 只与审核通过（reviewStatus=1）的图片比对：未过审的图不可见，也不该阻挡别人上传。
+     * 指纹为 null（下载/计算失败）时直接跳过，降级为不拦截，不阻断正常上传。
+     *
+     * @param picHash   待上传图片的 pHash 指纹
+     * @param spaceId   目标空间 id，为空表示公共图库
+     * @param excludeId 更新场景下要排除的自身 id，新增时传 null
+     */
+    private void checkDuplicatePicture(Long picHash, Long spaceId, Long excludeId) {
+        if (picHash == null) {
+            return;
+        }
+        LambdaQueryWrapper<Picture> queryWrapper = new LambdaQueryWrapper<Picture>()
+                .select(Picture::getId, Picture::getPicName, Picture::getPicHash)
+                .eq(Picture::getReviewStatus, 1)
+                .isNotNull(Picture::getPicHash);
+        if (ObjectUtil.isNotEmpty(spaceId)) {
+            queryWrapper.eq(Picture::getSpaceId, spaceId);
+        } else {
+            queryWrapper.isNull(Picture::getSpaceId);
+        }
+        if (excludeId != null) {
+            queryWrapper.ne(Picture::getId, excludeId);
+        }
+        List<Picture> sameScopePictures = baseMapper.selectList(queryWrapper);
+        for (Picture exist : sameScopePictures) {
+            if (ImageHashUtil.hammingDistance(picHash, exist.getPicHash())
+                    <= PictureConstant.PHASH_DUPLICATE_DISTANCE) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                        String.format("该图片已存在（与「%s」重复），请勿重复上传", exist.getPicName()));
+            }
+        }
+    }
+
+    /**
+     * 从 COS 下载图片计算 pHash 指纹，失败时只记日志返回 null（查重降级为不拦截，不阻断上传）
      */
     private Long computePicHash(String url) {
         File tempFile = null;
         try {
             tempFile = File.createTempFile("phash_", null);
-            HttpUtil.downloadFile(cosClientConfig.getHost() + "/" + url, tempFile);
+            cosManager.downloadToFile(url, tempFile);
             return ImageHashUtil.pHash(tempFile);
         } catch (Exception e) {
             log.warn("compute pic hash error, url = {}", url, e);
@@ -770,7 +822,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
      * 通用筛选（名称、分类、格式、标签）由 buildQueryWrapper 统一构建；
      * 各场景互不相同的"范围条件"（主页只看已过审、公共按用户隔离、私有按空间隔离）
      * 通过 Consumer 以函数式方式追加；返回的 VO 类型由 voClass 指定。
-     * 排序在内存按颜色距离完成，查出全量候选后再做内存分页。
+     * 颜色距离在内存计算：先按距离升序排，再按 {@link PictureConstant#COLOR_FILTER_MAX_DISTANCE}
+     * 只保留同色系（不做补位），最后做内存分页（total 是收录后的数量，不是全库候选数）。
      *
      * @param targetColor    目标颜色（#RRGGBB / 0xRRGGBB）
      * @param picture        携带通用筛选条件的实体
@@ -795,17 +848,23 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         // 与目标颜色的感知距离升序：颜色越接近排名越靠前
         pictureList.sort(
                 Comparator.comparingDouble(item -> ColorUtil.colorDistance(targetColor, item.getPicColor())));
-        long total = pictureList.size();
+        // 只收录同色系：与查询色距离超过阈值的判定为"颜色不符"，直接不返回，
+        // 不做任何补位，库里没有该色系的图就如实返回空
+        List<Picture> matchedList = pictureList.stream()
+                .filter(item -> ColorUtil.colorDistance(targetColor, item.getPicColor())
+                        <= PictureConstant.COLOR_FILTER_MAX_DISTANCE)
+                .collect(Collectors.toList());
+        long total = matchedList.size();
         long current = Math.max(1, pageNum);
         long size = Math.max(1, pageSize);
         int fromIndex = (int) Math.min((current - 1) * size, total);
         int toIndex = (int) Math.min(fromIndex + size, total);
-        List<Long> userIds = pictureList.subList(fromIndex, toIndex).stream()
+        List<Long> userIds = matchedList.subList(fromIndex, toIndex).stream()
                 .map(Picture::getUserId)
                 .collect(Collectors.toList());
         Map<Long, String> userNameMap = userService.getUserNameMap(userIds);
         // 转换为 VO 分页对象
-        List<V> voList = pictureList.subList(fromIndex, toIndex).stream()
+        List<V> voList = matchedList.subList(fromIndex, toIndex).stream()
                 .map(item -> {
                     V v = toVO(item, voClass);
                     BeanUtil.setProperty(v, "userName", userNameMap.get(item.getUserId()));
@@ -962,15 +1021,15 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         ThrowUtil.throwIf(pictureId == null, ErrorCode.PARAMS_ERROR, "图片ID不能为空");
         Picture picture = checkPictureExists(pictureId);
         ThrowUtil.throwIf(picture.getReviewStatus() != 1, ErrorCode.PARAMS_ERROR, "该图片未通过审核!");
-        ThrowUtil.throwIf(picture.getPicHash() == null, ErrorCode.PARAMS_ERROR, "该图片缺少指纹信息，暂不支持相似搜索");
-        long targetHash = picture.getPicHash();
+        double[] targetVector = parseVector(picture.getPicVector());
+        ThrowUtil.throwIf(targetVector == null, ErrorCode.PARAMS_ERROR, "该图片暂未生成语义向量，暂不支持相似搜索");
 
-        // 库内候选：只查有指纹的图片；按汉明距离升序，距离相同（相似度一致）时新的排前面
+        // 库内候选：只查已生成语义向量的图片；同一检索范围（空间内 or 公共图库）内检索
         LambdaQueryWrapper<Picture> queryWrapper = new LambdaQueryWrapper<Picture>()
-                .select(Picture::getId, Picture::getPicHash, Picture::getCreateTime)
+                .select(Picture::getId, Picture::getPicVector, Picture::getCreateTime)
                 .ne(Picture::getId, pictureId)
                 .eq(Picture::getReviewStatus, 1)
-                .isNotNull(Picture::getPicHash);
+                .isNotNull(Picture::getPicVector);
         if (ObjectUtil.isNotEmpty(picture.getSpaceId())) {
             // 私有图只在本人空间范围内检索，不会搜到其他空间或公共图库
             queryWrapper.eq(Picture::getSpaceId, picture.getSpaceId());
@@ -978,14 +1037,25 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             queryWrapper.isNull(Picture::getSpaceId);
         }
         List<Picture> candidates = baseMapper.selectList(queryWrapper);
-        candidates
-                .sort(Comparator.comparingInt((Picture c) -> ImageHashUtil.hammingDistance(targetHash, c.getPicHash()))
-                        .thenComparing(Picture::getCreateTime, Comparator.reverseOrder()));
-        List<Long> resultIds = candidates.stream()
+        // 计算余弦相似度，仅保留 ≥ 阈值的；相似度降序，相同时新的排前面
+        List<PictureSimilarity> sims = new ArrayList<>();
+        for (Picture c : candidates) {
+            double[] v = parseVector(c.getPicVector());
+            if (v == null) {
+                continue;
+            }
+            double sim = cosineSimilarity(targetVector, v);
+            if (sim >= PictureConstant.CLIP_SIMILARITY_THRESHOLD) {
+                sims.add(new PictureSimilarity(c.getId(), sim, c.getCreateTime()));
+            }
+        }
+        sims.sort(Comparator.comparingDouble(PictureSimilarity::getSimilarity).reversed()
+                .thenComparing(PictureSimilarity::getCreateTime, Comparator.reverseOrder()));
+        // SIMILAR_PICTURE_COUNT 只限制最大返回数量；没有相似图片返回空列表
+        List<Long> resultIds = sims.stream()
                 .limit(PictureConstant.SIMILAR_PICTURE_COUNT)
-                .map(Picture::getId)
+                .map(PictureSimilarity::getId)
                 .collect(Collectors.toList());
-        // 没有相似图片返回空列表即可，SIMILAR_PICTURE_COUNT 只限制最大返回数量
         if (CollUtil.isEmpty(resultIds)) {
             return new ArrayList<>();
         }
@@ -997,6 +1067,72 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
                 .filter(ObjectUtil::isNotEmpty)
                 .map(item -> toVO(item, HomePictureVO.class))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 相似度中间记录：图片 id、余弦相似度、创建时间（用于排序）
+     */
+    private static class PictureSimilarity {
+        private final Long id;
+        private final double similarity;
+        private final LocalDateTime createTime;
+
+        PictureSimilarity(Long id, double similarity, LocalDateTime createTime) {
+            this.id = id;
+            this.similarity = similarity;
+            this.createTime = createTime;
+        }
+
+        Long getId() {
+            return id;
+        }
+
+        double getSimilarity() {
+            return similarity;
+        }
+
+        LocalDateTime getCreateTime() {
+            return createTime;
+        }
+    }
+
+    /**
+     * 将数据库存的逗号分隔向量字符串解析为 double 数组；格式非法或为空返回 null
+     */
+    private double[] parseVector(String s) {
+        if (StrUtil.isBlank(s)) {
+            return null;
+        }
+        String[] parts = s.split(",");
+        double[] v = new double[parts.length];
+        try {
+            for (int i = 0; i < parts.length; i++) {
+                v[i] = Double.parseDouble(parts[i].trim());
+            }
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        return v;
+    }
+
+    /**
+     * 余弦相似度：向量已 L2 归一化时即点积，这里仍按公式严格计算；
+     * 长度不一致或零向量返回 -1（不参与相似判定）
+     */
+    private double cosineSimilarity(double[] a, double[] b) {
+        if (a == null || b == null || a.length != b.length) {
+            return -1;
+        }
+        double dot = 0, normA = 0, normB = 0;
+        for (int i = 0; i < a.length; i++) {
+            dot += a[i] * b[i];
+            normA += a[i] * a[i];
+            normB += b[i] * b[i];
+        }
+        if (normA == 0 || normB == 0) {
+            return -1;
+        }
+        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
     }
 
     @Override

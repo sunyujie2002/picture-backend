@@ -24,6 +24,7 @@
         <result column="reviewer_id" property="reviewerId" />
         <result column="review_time" property="reviewTime" />
         <result column="space_id" property="spaceId" />
+        <result column="pic_vector" property="picVector" />
         <result column="pic_hash" property="picHash" />
         <result column="pic_color" property="picColor" />
     </resultMap>
@@ -50,6 +51,7 @@
         reviewer_id,
         review_time,
         space_id,
+        pic_vector,
         pic_hash,
         pic_color
     </sql>
